@@ -24,7 +24,6 @@ void setup() {
 
   wifimanager();
   httpsclient();
-  //added
   readFile();
 
 
