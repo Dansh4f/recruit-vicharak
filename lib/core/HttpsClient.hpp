@@ -8,7 +8,7 @@
 #include <SPIFFS.h>
 #include <WiFiClientSecure.h>
 
-const char* url= "https://httpbin.org/bytes/300";
+const char* url= "https://100daysofcode.s3-eu-west-1.amazonaws.com/rfc2616.txt";
 
 const char* filename= "/file.txt";
 

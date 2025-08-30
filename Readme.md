@@ -32,7 +32,7 @@ How it works (implementation summary)
   - The target URL is in `const char* url` (edit this to change what to download).
   - A large static buffer `buff[8192]` (8 KB) is used for read/write I/O.
   - The code streams the response into SPIFFS, measuring micros() before/after download and per-write time to compute speeds.
-  - It prints `average download speed: XX.XX KB/s` and `avg write speed: XX.XX KB/s` to Serial.
+  - It prints lines like `average download speed: 115.08 KB/s` and `avg write speed: 794.88 KB/s` to Serial (values vary by run).
 
 Key parameters and reasoning / performance knobs
 -----------------------------------------------
@@ -44,7 +44,11 @@ Key parameters and reasoning / performance knobs
 Configuration
 -------------
 - Change download URL:
-  - Edit `lib/core/HttpsClient.hpp` and update the `const char* url` value. Example URLs for testing: a large public file — `https://speed.hetzner.de/100MB.bin`, or `https://httpbin.org/bytes/500000` for a synthetic payload.
+  - The project currently uses the URL hardcoded in `lib/core/HttpsClient.hpp`:
+    `https://100daysofcode.s3-eu-west-1.amazonaws.com/schedule.txt`.
+    This is a small text file useful for functionality checks but too small for a reliable throughput measurement.
+  For performance testing (400 KB/s target) use a larger test file, for example:
+  `https://100daysofcode.s3-eu-west-1.amazonaws.com/rfc2616.txt`.
 - Change output filename:
   - Edit `const char* filename` in `lib/core/HttpsClient.hpp` (currently `"/file.txt"`).
 - Change WiFi credentials:
@@ -69,19 +73,44 @@ If your `platformio.ini` uses a different environment name (e.g. `esp32dev`), pa
 
 How to run the test
 -------------------
-1. Edit `lib/core/HttpsClient.hpp` and set a large test URL (50–100+ MB recommended for stable throughput measurement).
+1. Edit `lib/core/HttpsClient.hpp` and set the desired `const char* url` value. Examples used in these logs:
+  - Small functional check: `https://100daysofcode.s3-eu-west-1.amazonaws.com/schedule.txt`
+  - Larger test file used here: `https://100daysofcode.s3-eu-west-1.amazonaws.com/rfc2616.txt`
+  - For sustained throughput benchmarking, use a large binary (50–100+ MB) such as `https://speed.hetzner.de/100MB.bin`.
 2. Ensure WiFi credentials in `lib/core/WiFiManager.hpp` are correct.
-3. Build+flash and open the serial monitor (115200).
-4. Watch output lines similar to (example only):
+3. Build + flash, then open the serial monitor at 115200 baud.
+4. Reset the ESP32 so the download runs and watch the monitor for the download/write lines.
 
-  - "fetching url: https://..."
-  - "file size: 104857600 byte"
-  - "writing to SPIFFS..."
-  - "file written to spiffs"
-  - "average download speed: 420.12 KB/s"
-  - "avg write speed: 380.45 KB/s"
+Example outputs (from your runs):
 
-Note: The repository code prints the computed speeds (download and write) to Serial using `Serial.printf()`; use those values for validation.
+- schedule.txt (small file) — functional check
+
+```
+fetching url: https://100daysofcode.s3-eu-west-1.amazonaws.com/schedule.txt
+file size: 70 byte
+writing to SPIFFS...
+file written to spiffs
+average download speed: 115.08 KB/s
+avg write speed: 794.88 KB/s
+```
+
+- rfc2616.txt (larger text file used in your run)
+
+```
+fetching url: https://100daysofcode.s3-eu-west-1.amazonaws.com/rfc2616.txt
+file size: 422279 byte
+writing to SPIFFS...
+file written to spiffs
+average download speed: 14.23 KB/s
+avg write speed: 35.62 KB/s
+```
+
+Notes:
+- Small files (schedule.txt) validate correctness but are too short to measure sustained network throughput accurately.
+- The `rfc2616.txt` run shows low download speed in this environment; causes may include server throttling, WiFi conditions, or TLS overhead on the server side.
+- For a reliable measurement toward the 400 KB/s target, use a large binary hosted on a high-bandwidth server (see `speed.hetzner.de`) and run the test several times, averaging results.
+
+Note: The repository prints the computed speeds (download and write) to Serial using `Serial.printf()`; use those values for validation.
 
 Measuring and validating 400 KB/s
 ---------------------------------
@@ -91,14 +120,61 @@ Measuring and validating 400 KB/s
   - Re-run the test several times and average the results.
   - Verify both download and write speeds — if write is lower than 400 KB/s it can throttle the effective throughput.
 
-Sample result format (replace with your measured output)
--------------------------------------------------------
-Example (not from your board):
+Actual serial output (concise):
 
-average download speed: 412.34 KB/s
-avg write speed: 395.77 KB/s
+```
+Phase 1 completed!you are connected to : realme 6
+IP address172.31.82.82WIFI RSSI-18dbm
 
-If `average download speed >= 400.00 KB/s` then the performance target is met.
+ fetching url: https://100daysofcode.s3-eu-west-1.amazonaws.com/schedule.txt
+HTTP begin..
+HTTP GET code: 200
+file size: 70 byte
+SPIFFS total  space: 1318001 bytes
+ used space: 753 bytes
+ free space: 1318001 bytes
+writing to SPIFFS...
+file written to spiffs
+file size wrrtten: 70 bytes
+average download speed: 115.08 KB/s
+avg write speed: 794.88 KB/s
+```
+
+Measured speeds:
+- Download: 115.08 KB/s (does NOT meet 400 KB/s target)
+- Write to SPIFFS: 794.88 KB/s
+
+Test with a larger file (example)
+
+If you change the URL in `lib/core/HttpsClient.hpp` to:
+
+`https://100daysofcode.s3-eu-west-1.amazonaws.com/rfc2616.txt`
+
+the serial output looks like:
+
+```
+Phase 1 completed!you are connected to : realme 6
+IP address172.31.82.82WIFI RSSI-18dbm
+
+ fetching url: https://100daysofcode.s3-eu-west-1.amazonaws.com/rfc2616.txt
+HTTP begin..
+HTTP GET code: 200
+file size: 422279 byte
+SPIFFS total  space: 1318001 bytes
+ used space: 388799 bytes
+ free space: 1318001 bytes
+writing to SPIFFS...
+file written to spiffs
+file size wrrtten: 422279 bytes
+average download speed: 14.23 KB/s
+avg write speed: 35.62 KB/s
+```
+
+Measured speeds for this run:
+- Download: 14.23 KB/s
+- Write to SPIFFS: 35.62 KB/s
+
+Conclusion: Using this host and network, both download and write speeds are well below the 400 KB/s target — investigate network bandwidth, server throttling, WiFi signal, or try a different high-bandwidth host for accurate throughput testing.
 
 Error handling implemented in the code
 -------------------------------------
